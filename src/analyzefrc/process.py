@@ -1,19 +1,33 @@
-from analysis.deps_types import dip
+from analyzefrc.deps_types import Optional
+from analyzefrc.deps_types import dip
+from dataclasses import dataclass
 from frc.deps_types import Img
 import frc.frc_functions as frcf
 import frc.utility as util
 import numpy as np
-import datatest
 from readlif.reader import LifFile
 import matplotlib.pyplot as plt
+from deco import concurrent, synchronized
 
+
+@dataclass
+class FRCMeasureSettings:
+    nm_per_pixel: float
+    NA: Optional[float]
+    lambda_excite_nm: Optional[float]
+
+
+
+@dataclass
 class FRCMeasurement:
     """
     An FRCMeasurement represents a single measurement within an FRCImage and contains the actual data as
     a DIP Image (which itself can be converted to a numpy array at no cost).
     """
-    image: dip.Image
-    measure_settings: dict
+    image: np.ndarray
+    group_name: str
+    index: int
+    settings: FRCMeasureSettings
 
 
 class FRCImage:
@@ -24,12 +38,42 @@ class FRCImage:
     some properties variable per image.
     """
     name: str
-    nm_per_pixel: float
     measurements: list[FRCMeasurement]
-    image_settings: dict
+
+    def __init__(self, name, measurements) -> None:
+        self.name = name
+        self.measurements = measurements
 
 
-def single_curve(img: Img, scale):
+def curves(imgs: list[FRCImage], preprocess=True):
+    tasks = []
+    for img in imgs:
+        for measure in img.measurements:
+            print(f"{img.name} {measure.index}")
+            if preprocess:
+                measure.image = preprocess_img(measure.image)
+            single_curve(measure)
+
+def preprocess_img(img: np.ndarray):
+    img = util.square_image(img, add_padding=False)
+    return util.apply_tukey(img)
+
+
+def single_curve(measure: FRCMeasurement):
+    img = measure.image
+    img_size = img.shape[0]
+    nm_per_pixel = measure.settings.nm_per_pixel
+    frc_curve = frcf.one_frc(img, 1)
+    xs_pix = np.arange(len(frc_curve)) / img_size
+    xs_nm_freq = xs_pix * (1 / nm_per_pixel)
+    frc_res, res_y, thres = frcf.frc_res(xs_nm_freq, frc_curve, img_size)
+    plt.plot(xs_nm_freq, thres(xs_nm_freq))
+    plt.plot(xs_nm_freq, frc_curve)
+    plt.show()
+
+
+
+def single_curve2(img: Img, scale):
     img = np.array(img)
     img = util.square_image(img, add_padding=False)
     img_size = img.shape[0]
@@ -42,16 +86,5 @@ def single_curve(img: Img, scale):
     plt.plot(xs_nm_freq, frc_curve)
     plt.show()
 
-sted = LifFile('../data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif')
-imgs = [i for i in sted.get_iter_image()]
 
-img_1 = imgs[0]
-
-pixels_per_um = img_1.scale[0]
-um_per_pixel = 1 / pixels_per_um
-nm_pix_fact = 1 / um_per_pixel / 1000
-
-channel_list = [i for i in img_1.get_iter_c(t=0, z=0)]
-img = np.array(channel_list[0])
-single_curve(img, nm_pix_fact)
 
