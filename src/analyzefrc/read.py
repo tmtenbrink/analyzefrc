@@ -1,7 +1,9 @@
 from pathlib import Path
 from readlif.reader import LifFile
 from analyzefrc.deps_types import np
+from analyzefrc.deps_types import Union
 from analyzefrc.process import FRCMeasurement, FRCImage, FRCMeasureSettings
+
 
 def return_path(pth: str):
     return Path(pth).absolute()
@@ -9,6 +11,7 @@ def return_path(pth: str):
 
 def get_lif_file(pth: str):
     return LifFile(return_path(pth))
+
 
 def lif_read(pth: str, debug=False) -> list[FRCImage]:
     """
@@ -19,7 +22,7 @@ def lif_read(pth: str, debug=False) -> list[FRCImage]:
     lif_file = get_lif_file(pth)
     imgs = lif_file.get_iter_image()
     if debug:
-        imgs = [ next(imgs) ]
+        imgs = [next(imgs)]
     for img in imgs:
         pixels_per_um = img.scale[0]
         name = img.name
@@ -30,7 +33,7 @@ def lif_read(pth: str, debug=False) -> list[FRCImage]:
         measurements = []
         channels = img.get_iter_c(t=0, z=0)
         if debug:
-            channels = [ next(channels) ]
+            channels = [next(channels)]
         for i, c in enumerate(channels):
             dip_im = np.array(c)
             settings = FRCMeasureSettings(NA=NA, lambda_excite_nm=lam, nm_per_pixel=nm_per_pixel)
@@ -39,3 +42,9 @@ def lif_read(pth: str, debug=False) -> list[FRCImage]:
         frc_image = FRCImage(name, measurements)
         images.append(frc_image)
     return images
+
+
+def frc_image(img: np.ndarray, name='image'):
+    settings = FRCMeasureSettings(1)
+    measurement = FRCMeasurement(img, name, 0, settings)
+    return FRCImage(name, [measurement])

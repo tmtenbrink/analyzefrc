@@ -1,4 +1,4 @@
-from analyzefrc.deps_types import Optional
+from analyzefrc.deps_types import Optional, Union
 from analyzefrc.deps_types import dip
 from dataclasses import dataclass
 from frc.deps_types import Img
@@ -13,9 +13,8 @@ from deco import concurrent, synchronized
 @dataclass
 class FRCMeasureSettings:
     nm_per_pixel: float
-    NA: Optional[float]
-    lambda_excite_nm: Optional[float]
-
+    NA: Optional[float] = None
+    lambda_excite_nm: Optional[float] = None
 
 
 @dataclass
@@ -45,7 +44,9 @@ class FRCImage:
         self.measurements = measurements
 
 
-def curves(imgs: list[FRCImage], preprocess=True):
+def plot_curves(imgs: Union[list[FRCImage], FRCImage], preprocess=True):
+    if isinstance(imgs, FRCImage):
+        imgs = [imgs]
     tasks = []
     for img in imgs:
         for measure in img.measurements:
@@ -53,6 +54,7 @@ def curves(imgs: list[FRCImage], preprocess=True):
             if preprocess:
                 measure.image = preprocess_img(measure.image)
             single_curve(measure)
+
 
 def preprocess_img(img: np.ndarray):
     img = util.square_image(img, add_padding=False)
@@ -72,7 +74,6 @@ def single_curve(measure: FRCMeasurement):
     plt.show()
 
 
-
 def single_curve2(img: Img, scale):
     img = np.array(img)
     img = util.square_image(img, add_padding=False)
@@ -85,6 +86,3 @@ def single_curve2(img: Img, scale):
     plt.plot(xs_nm_freq, thres(xs_nm_freq))
     plt.plot(xs_nm_freq, frc_curve)
     plt.show()
-
-
-

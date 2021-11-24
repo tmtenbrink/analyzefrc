@@ -9,3 +9,4 @@ np = numpy
 plt = pyplot
 
 Optional = typing.Optional
+Union = typing.Union
