@@ -1,10 +1,13 @@
-from analyzefrc.process import FRCImage, curves
+from analyzefrc.process import FRCImage, plot_curves
 from readlif.reader import LifFile
 import numpy as np
 from analyzefrc.read import lif_read
 
-x = lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug=True)
-curves(x)
+
+if __name__ == '__main__':
+    x = lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug=True)
+    plot_curves(x, concurrent=False)
+
 
 print()
 

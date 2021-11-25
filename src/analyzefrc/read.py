@@ -15,7 +15,7 @@ def get_lif_file(pth: str):
 
 def lif_read(pth: str, debug=False) -> list[FRCImage]:
     """
-    Read a .lif file. Assumes the scale is in pixels per um and is equal in all directions.
+    Read a LIF file. Assumes the scale is in pixels per um and is equal in all directions.
     If debug is True, it will only get the first image and channel.
     """
     images = []

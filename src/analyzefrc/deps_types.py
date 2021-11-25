@@ -10,3 +10,4 @@ plt = pyplot
 
 Optional = typing.Optional
 Union = typing.Union
+Callable = typing.Callable
