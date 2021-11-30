@@ -1,13 +1,28 @@
-from analyzefrc.process import FRCImage, plot_curves
-from readlif.reader import LifFile
 import numpy as np
-from analyzefrc.read import lif_read
+import diplib as dip
 
+from analyzefrc.process import plot_curves, create_tasks
+from analyzefrc.read import lif_read, frc2_image, image_read, get_image, frc1_image
+from frc import utility as frcu
 
 if __name__ == '__main__':
-    x = lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug=True)
-    plot_curves(x, concurrent=False)
+    # x = get_image('./data/siemens.tiff')
+    # x = frcu.gaussf(x, 10)
+    # x_dip = dip.Image(x)
+    # x_dip.Show()
+    # y1 = np.array(dip.PoissonNoise(x_dip/2))
+    # y2 = np.array(dip.PoissonNoise(x_dip/2))
+    # y3 = np.array(dip.PoissonNoise(x_dip))
+    #
+    # z = frc2_image(y1, y2)
+    # z_one = frc1_image(y3)
+    # plot_curves(z, concurrency=False)
+    # plot_curves(z_one, concurrency=False)
 
+    x = lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug=True)
+    z = create_tasks(x, concurrency=True)
+    print(z)
+    print()
 
 print()
 
