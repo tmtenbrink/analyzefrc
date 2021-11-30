@@ -20,6 +20,8 @@ class FRCMeasureSettings:
 
 @dataclass
 class Curve:
+    key: str
+
     curve_x: np.ndarray
     curve_y: np.ndarray
     frc_res: float
@@ -31,6 +33,10 @@ class Curve:
     res_sd: float
     res_y: float
     thres: np.ndarray
+    thres_name: str
+
+    measure: 'FRCMeasurement'
+
 
 @dataclass
 class FRCMeasurement:
@@ -103,16 +109,17 @@ class ProcessTask:
 
 
 def process_task(task: ProcessTask):
+    print(f"{task.measure.group_name} {task.measure.index}")
     for processing in task.processings:
         task.measure = processing(task.measure)
-    return task.measure
+    return task.measure.curves
 
 
 @concurrent
 def process_task_conc(task: ProcessTask):
     for processing in task.processings:
         task.measure = processing(task.measure)
-    return task.measure
+    return task.measure.curves
 
 
 @synchronized
@@ -126,32 +133,40 @@ def process_all_tasks(tasks: list[ProcessTask], concurrency):
 
 
 @synchronized
-def process_measures(measure_tasks: list[ProcessTask], concurrency):
+def process_measures_conc(measure_tasks: list[ProcessTask]) -> dict:
     processed_measures = {}
-    if concurrency:
-        for task in measure_tasks:
-            processed_measures[(task.measure.group_name, task.measure.index)] = process_task_conc(task)
-    else:
-        for task in measure_tasks:
-            processed_measures[(task.measure.group_name, task.measure.index)] = process_task(task)
+    for task in measure_tasks:
+        processed_measures[(task.measure.group_name, task.measure.index)] = process_task_conc(task)
     return processed_measures
 
 
-def create_tasks(imgs: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True):
-    if isinstance(imgs, FRCSet):
-        imgs = [imgs]
+def process_measures(measure_tasks: list[ProcessTask]) -> dict:
+    processed_measures = {}
+    for task in measure_tasks:
+        processed_measures[(task.measure.group_name, task.measure.index)] = process_task(task)
+
+    return processed_measures
+
+
+def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True):
+    if isinstance(frc_sets, FRCSet):
+        frc_sets = [frc_sets]
     process_tasks = []
-    for img in imgs:
-        for measure in img.measurements:
-            print(f"{img.name} {measure.index}")
+    for frc_set in frc_sets:
+        for measure in frc_set.measurements:
             if preprocess:
                 tasks = [preprocess_measure]
             else:
                 tasks = []
             tasks.append(measure_curve)
             process_tasks.append(ProcessTask(tasks, measure))
-    processed = process_measures(process_tasks, concurrency)
+    processed_measures = process_measures_conc(process_tasks) if concurrency else process_measures(process_tasks)
+    processed = [curve for curves in processed_measures.values() for curve in curves]
     return processed
+
+
+# def analyze(imgs: Union[list[FRCSet], FRCSet], plot_groups: list[PlotGroup], preprocess=True, concurrency=True):
+#     processed = create_tasks(imgs, preprocess, concurrency)
 
 
 def plot_curves(imgs: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True, save=True):
@@ -199,7 +214,7 @@ def measure_curve(measure: FRCMeasurement):
             measure.curve_tasks = [CurveTask(method='2FRC', avg_n=1)]
 
     curves = []
-    for curve_task in measure.curve_tasks:
+    for curve_i, curve_task in enumerate(measure.curve_tasks):
 
         if curve_task.method == '1FRC' or curve_task.method == '1FRC1':
             def frc_func(img_frc, _img2):
@@ -249,11 +264,13 @@ def measure_curve(measure: FRCMeasurement):
         except NoIntersectionException as e:
             print(e)
         avg_desc = f"{curve_task.avg_n} curves averaged." if curve_task.avg_n > 1 else ""
-        desc = "Resolution ({} threshold): {:.3g} {}nm. {} {}".format(curve_task.threshold, frc_res, sd_str, smooth_desc,
+        desc = "Resolution ({} threshold): {:.3g} {}nm. {} {}".format(curve_task.threshold, frc_res, sd_str,
+                                                                      smooth_desc,
                                                                       avg_desc)
 
-        curve = Curve(xs_nm_freq, frc_curve, frc_res, f"{measure.group_name} measurement {measure.index}", label, desc,
-                      res_sd, res_y, thres_curve)
+        curve = Curve(f"{measure.group_name}-{measure.index}-{curve_i}", xs_nm_freq, frc_curve, frc_res,
+                      f"{measure.group_name} measurement {measure.index}", label, desc,
+                      res_sd, res_y, thres_curve, curve_task.threshold, measure)
         curves.append(curve)
     measure.curves = curves
     return measure
