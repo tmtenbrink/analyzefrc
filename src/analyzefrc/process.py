@@ -52,6 +52,10 @@ class FRCMeasurement:
     curve_tasks: Optional[list] = None
     image_2: Optional[np.ndarray] = None
     curves: list[Curve] = None
+    id: str = None
+
+    def __post_init__(self):
+        self.id = f"{self.group_name}-c{self.index}"
 
 
 class FRCSet:
@@ -70,24 +74,8 @@ class FRCSet:
 
 
 @dataclass
-class PlotTask:
-    method: str = '1FRC1'
-    smooth: bool = False
-    smooth_frac: float = 0.2
-    avg_n: int = None
-    plot_res: bool = True
-    threshold: str = '1/7'
-
-    def __post_init__(self):
-        if self.avg_n is None:
-            if self.method == '2FRC' or self.smooth:
-                self.avg_n = 1
-            else:
-                self.avg_n = 5
-
-
-@dataclass
 class CurveTask:
+    key: str = ''
     method: str = '1FRC1'
     smooth: bool = False
     smooth_frac: float = 0.2
@@ -123,16 +111,6 @@ def process_task_conc(task: ProcessTask):
 
 
 @synchronized
-def process_all_tasks(tasks: list[ProcessTask], concurrency):
-    if concurrency:
-        for t in tasks:
-            process_task_conc(t)
-    else:
-        for t in tasks:
-            process_task(t)
-
-
-@synchronized
 def process_measures_conc(measure_tasks: list[ProcessTask]) -> dict:
     processed_measures = {}
     for task in measure_tasks:
@@ -148,7 +126,7 @@ def process_measures(measure_tasks: list[ProcessTask]) -> dict:
     return processed_measures
 
 
-def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True):
+def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True) -> list[ProcessTask]:
     if isinstance(frc_sets, FRCSet):
         frc_sets = [frc_sets]
     process_tasks = []
@@ -160,29 +138,45 @@ def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurr
                 tasks = []
             tasks.append(measure_curve)
             process_tasks.append(ProcessTask(tasks, measure))
-    processed_measures = process_measures_conc(process_tasks) if concurrency else process_measures(process_tasks)
-    processed = [curve for curves in processed_measures.values() for curve in curves]
-    return processed
+
+    return process_tasks
 
 
-# def analyze(imgs: Union[list[FRCSet], FRCSet], plot_groups: list[PlotGroup], preprocess=True, concurrency=True):
-#     processed = create_tasks(imgs, preprocess, concurrency)
+def group_all(process_name: str, curves: list[Curve]) -> dict[str, list[Curve]]:
+    return {process_name: curves}
 
 
-def plot_curves(imgs: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True, save=True):
-    if isinstance(imgs, FRCSet):
-        imgs = [imgs]
-    process_tasks = []
-    for img in imgs:
-        for measure in img.measurements:
-            print(f"{img.name} {measure.index}")
-            if preprocess:
-                tasks = [preprocess_measure]
-            else:
-                tasks = []
-            tasks.append(single_curve)
-            process_tasks.append(ProcessTask(tasks, measure))
-    process_all_tasks(process_tasks, concurrency)
+def group_measures(curves: list[Curve]) -> dict[str, list[Curve]]:
+    measure_dict = {}
+    for c in curves:
+        if c.measure.id not in measure_dict:
+            measure_dict[c.measure.id] = [c]
+        else:
+            measure_dict[c.measure.id] += c
+    return measure_dict
+
+
+def group_sets(curves: list[Curve]) -> dict[str, list[Curve]]:
+    group_dict = {}
+    for c in curves:
+        if c.measure.group_name not in group_dict:
+            group_dict[c.measure.group_name] = [c]
+        else:
+            group_dict[c.measure.group_name].append(c)
+    return group_dict
+
+
+def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True,
+                grouping: str = 'all') -> dict[str, list[Curve]]:
+    tasks = create_tasks(frc_sets, preprocess)
+    processed_measures = process_measures_conc(tasks) if concurrency else process_measures(tasks)
+    processed_curves = [curve for curves in processed_measures.values() for curve in curves]
+    if grouping == 'sets':
+        return group_sets(processed_curves)
+    elif grouping == 'measures':
+        return group_measures(processed_curves)
+    else:
+        return group_all(process_name, processed_curves)
 
 
 def preprocess_measure(measure: FRCMeasurement):
@@ -209,9 +203,9 @@ def measure_curve(measure: FRCMeasurement):
 
     if measure.curve_tasks is None:
         if measure.image_2 is None:
-            measure.curve_tasks = [CurveTask()]
+            measure.curve_tasks = [CurveTask(key='curve1')]
         else:
-            measure.curve_tasks = [CurveTask(method='2FRC', avg_n=1)]
+            measure.curve_tasks = [CurveTask(key='curve1', method='2FRC', avg_n=1)]
 
     curves = []
     for curve_i, curve_task in enumerate(measure.curve_tasks):
@@ -274,104 +268,3 @@ def measure_curve(measure: FRCMeasurement):
         curves.append(curve)
     measure.curves = curves
     return measure
-
-
-def single_curve(measure: FRCMeasurement):
-    img = measure.image
-    # Can be None
-    img2 = measure.image_2
-    img_size = img.shape[0]
-    nm_per_pixel = measure.settings.nm_per_pixel
-    frc_curve = frcf.one_frc(img, 1)
-    xs_pix = np.arange(len(frc_curve)) / img_size
-    xs_nm_freq = xs_pix * (1 / nm_per_pixel)
-
-    fig, ax = plt.subplots()
-
-    # frc_res, res_y, thres = frcf.frc_res(xs_nm_freq, frc_curve, img_size)
-    # plt.plot(xs_nm_freq, thres(xs_nm_freq))
-    # plt.plot(xs_nm_freq, frc_curve)
-    # plt.show()
-
-    if measure.curve_tasks is None:
-        if measure.image_2 is None:
-            measure.curve_tasks = [PlotTask()]
-        else:
-            measure.curve_tasks = [PlotTask(method='2FRC', avg_n=1)]
-
-    min_y = -0.1
-    max_y = 1.1
-
-    descs = []
-    for plot_task in measure.curve_tasks:
-        if plot_task.method == '1FRC' or plot_task.method == '1FRC1':
-            def frc_func(img_frc, _img2):
-                return frcf.one_frc(img_frc, 1)
-        elif plot_task.method == '2FRC':
-            def frc_func(img_frc_1, img_frc_2):
-                return frcf.two_frc(img_frc_1, img_frc_2)
-        else:
-            raise ValueError("Unknown method {}".format(plot_task.method))
-        frc_curve = frc_func(img, img2)
-        frc_curves = [frc_curve]
-        for i in range(plot_task.avg_n - 1):
-            calculated_frc = frc_func(img, img2)
-            frc_curve += calculated_frc
-            frc_curves.append(calculated_frc)
-
-        frc_curve /= plot_task.avg_n
-
-        label = plot_task.method
-
-        smooth_desc = ""
-        if plot_task.smooth:
-            smooth_desc = " LOESS smoothing (point frac: {}).".format(plot_task.smooth_frac)
-            xs_pix, frc_curve, wout = loess_1d(xs_pix, frc_curve, frac=plot_task.smooth_frac)
-
-        ax.plot(xs_nm_freq, frc_curve, label=label, zorder=2)
-
-        frc_res = -1
-        sd_str = " "
-
-        try:
-            frc_res, res_y, thres = frcf.frc_res(xs_nm_freq, frc_curve, img_size, threshold=plot_task.threshold)
-
-            frc_res_list = []
-            for res_curve in frc_curves:
-                try:
-                    frc_res, _, _ = frcf.frc_res(xs_nm_freq, res_curve, img_size, threshold=plot_task.threshold)
-                    frc_res_list.append(frc_res)
-                except NoIntersectionException:
-                    pass
-            res_sd = np.std(np.array(frc_res_list))
-            if res_sd > 0:
-                sd_str = "± {:.2g} ".format(res_sd)
-
-            if plot_task.plot_res:
-                ax.plot(xs_nm_freq, thres(xs_pix), c='darkgoldenrod', label=f"Threshold curve ({plot_task.threshold})",
-                        zorder=1)
-                ax.vlines(1 / frc_res, min_y, res_y, ls='dashed', colors=['darkgoldenrod'], zorder=3)
-        except ValueError as e:
-            print(e)
-        avg_desc = f"{plot_task.avg_n} curves averaged." if plot_task.avg_n > 1 else ""
-        desc = "Resolution ({} threshold): {:.3g} {}nm. {} {}".format(plot_task.threshold, frc_res, sd_str, smooth_desc,
-                                                                      avg_desc)
-        descs.append(desc)
-
-    ax.set_xlabel("Spatial frequency ($\\mathrm{nm}^{-1}$)")
-    ax.set_ylabel("FRC")
-
-    ax.legend()
-    ax.set_ylim(min_y, max_y)
-
-    ax.set_title(f"{measure.group_name} measurement {measure.index}")
-
-    desc = '\n'.join(descs)
-    fig.supxlabel(desc, fontsize='small')
-    fig.set_tight_layout(True)
-    plt.show()
-    # if save:
-    #     fig.savefig(save_path, dpi=180)
-    # plt.close(fig)
-    # if frc_res > 0:
-    #     return frc_res, res_sd, NA

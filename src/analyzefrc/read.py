@@ -25,7 +25,7 @@ def get_image(pth: Union[str, PathLike]) -> np.array:
         return np.array(im)
 
 
-def lif_read(pth: str, debug=False) -> list[FRCSet]:
+def lif_read(pth: str, debug: str = '') -> list[FRCSet]:
     """
     Read a LIF file. Assumes the scale is in pixels per um and is equal in all directions.
     If debug is True, it will only get the first image and channel.
@@ -33,8 +33,11 @@ def lif_read(pth: str, debug=False) -> list[FRCSet]:
     images = []
     lif_file = get_lif_file(pth)
     imgs = lif_file.get_iter_image()
-    if debug:
+    if debug == 'single':
         imgs = [next(imgs)]
+    elif debug == 'two_set':
+        imgs_itered = [img for img in imgs]
+        imgs = [imgs_itered[0], imgs_itered[-1]]
     for img in imgs:
         pixels_per_um = img.scale[0]
         name = img.name
@@ -44,8 +47,11 @@ def lif_read(pth: str, debug=False) -> list[FRCSet]:
         lam = img.settings["StedDelayWavelength"] if "StedDelayWavelength" in img.settings else None
         measurements = []
         channels = img.get_iter_c(t=0, z=0)
-        if debug:
+        if debug == 'single':
             channels = [next(channels)]
+        elif debug == 'two_set':
+            channels_itered = [channel for channel in channels]
+            channels = [channels_itered[0], channels_itered[-1]]
         for i, c in enumerate(channels):
             dip_im = np.array(c)
             settings = FRCMeasureSettings(NA=NA, lambda_excite_nm=lam, nm_per_pixel=nm_per_pixel)

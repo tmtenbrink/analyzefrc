@@ -1,20 +1,24 @@
+from typing import Union
+
 from dataclasses import dataclass
 from analyzefrc.process import Curve
 import matplotlib.pyplot as plt
 
 
-class PlotGroup:
+class CurvePlot:
     title: str
     curves: list[Curve]
 
-    def __init__(self, *args, title='Title'):
+    def __init__(self, *args: Union[Curve, list[Curve]], title='Title'):
         self.title = title
         curves = []
         for arg in args:
             if isinstance(arg, list):
                 curves += arg
-            else:
+            elif isinstance(arg, Curve):
                 curves.append(arg)
+            else:
+                raise ValueError("Arguments must be Curves or lists of Curves!")
         self.curves = curves
 
     def plot(self):
@@ -43,3 +47,12 @@ class PlotGroup:
         fig.supxlabel('\n'.join(descs), fontsize='small')
         fig.set_tight_layout(True)
         plt.show()
+
+
+def plot_all(*multiple_groups: dict[str, list[Curve]]):
+    curve_plots = []
+    for multiple_group in multiple_groups:
+        for group_name, group in multiple_group.items():
+            curve_plots.append(CurvePlot(group, title=group_name))
+    for curve_plot in curve_plots:
+        curve_plot.plot()
