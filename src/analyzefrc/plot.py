@@ -1,8 +1,15 @@
-from typing import Union
+from typing import Union, Callable
 
-from dataclasses import dataclass
-from analyzefrc.process import Curve
+import time
+import pathlib as path
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+
+from analyzefrc.read import Curve
+
+
+__all__ = ['CurvePlot', 'plot_all']
 
 
 class CurvePlot:
@@ -21,7 +28,7 @@ class CurvePlot:
                 raise ValueError("Arguments must be Curves or lists of Curves!")
         self.curves = curves
 
-    def plot(self):
+    def plot(self, show=False, save=False, save_directory: Path = None, ax_fig_ops: Callable = None, dpi=180, **kwargs):
         min_y = -0.1
         max_y = 1.1
 
@@ -46,13 +53,28 @@ class CurvePlot:
 
         fig.supxlabel('\n'.join(descs), fontsize='small')
         fig.set_tight_layout(True)
-        plt.show()
+
+        if ax_fig_ops is not None:
+            ax, fig = ax_fig_ops(self, ax, fig)
+
+        if save:
+            if save_directory is None:
+                raise ValueError("Save folder path must be given when saving!")
+            save_path = save_directory.joinpath(self.title)
+            i = 0
+            while save_path.exists():
+                save_path = save_path.parent.joinpath(f"{self.title}{i}")
+                i += 1
+            fig.savefig(save_path, dpi=dpi, **kwargs)
+        if show:
+            plt.show()
+        plt.close(fig)
 
 
-def plot_all(*multiple_groups: dict[str, list[Curve]]):
+def plot_all(*multiple_groups: dict[str, list[Curve]], show=True, save=False, save_directory=None, dpi=180):
     curve_plots = []
     for multiple_group in multiple_groups:
         for group_name, group in multiple_group.items():
             curve_plots.append(CurvePlot(group, title=group_name))
     for curve_plot in curve_plots:
-        curve_plot.plot()
+        curve_plot.plot(show=show, save=save, save_directory=save_directory, dpi=dpi)

@@ -1,9 +1,7 @@
 import numpy as np
 import diplib as dip
 
-from analyzefrc.process import process_frc
-from analyzefrc.read import lif_read, frc2_image, image_read, get_image, frc1_image
-from analyzefrc.plot import plot_all
+import analyzefrc as afrc
 from frc import utility as frcu
 
 if __name__ == '__main__':
@@ -22,9 +20,10 @@ if __name__ == '__main__':
     # g = PlotGroup(j1, j2, title="TITLE")
     # g.plot()
 
-    x = lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug='two_set')
-    z = process_frc("XSTED_NileRed", x, concurrency=False)
-    plot_all(z, z)
+    x = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug='two_set')
+    plot_curves = afrc.process_frc("XSTED_NileRed", x, concurrency=False)
+    save_folder = afrc.create_save('./results', 'XSTED_NileRed', add_timestamp=True)
+    afrc.plot_all(plot_curves, show=False, save=True, save_directory=save_folder, dpi=180)
     print()
 
 

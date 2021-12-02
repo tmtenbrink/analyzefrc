@@ -1,93 +1,17 @@
-from analyzefrc.deps_types import Optional, Union, Callable
-from dataclasses import dataclass, field
+from typing import Optional, Union, Callable
+
+from dataclasses import dataclass
 from frc.deps_types import NoIntersectionException
 import frc.frc_functions as frcf
 import frc.utility as util
 import numpy as np
-import matplotlib.pyplot as plt
 from deco import concurrent, synchronized
 from loess.loess_1d import loess_1d
 
-
-@dataclass
-class FRCMeasureSettings:
-    nm_per_pixel: float
-    extra: dict = field(default_factory=dict)
-    smooth_curve: bool = False
-    NA: Optional[float] = None
-    lambda_excite_nm: Optional[float] = None
+from analyzefrc.read import FRCMeasureSettings, FRCMeasurement, FRCSet, Curve, CurveTask
 
 
-@dataclass
-class Curve:
-    key: str
-
-    curve_x: np.ndarray
-    curve_y: np.ndarray
-    frc_res: float
-
-    curve_title: str
-    curve_label: str
-    desc: str
-
-    res_sd: float
-    res_y: float
-    thres: np.ndarray
-    thres_name: str
-
-    measure: 'FRCMeasurement'
-
-
-@dataclass
-class FRCMeasurement:
-    """
-    An FRCMeasurement represents a single measurement within an FRCSet and contains the actual data as
-    a DIP Image (which itself can be converted to a numpy array at no cost). If only one image is provided,
-    it will calculate a 1FRC. If two are provided, it will calculate the standard FRC between 2 images.
-    """
-    group_name: str
-    index: int
-    settings: FRCMeasureSettings
-    image: np.ndarray
-    curve_tasks: Optional[list] = None
-    image_2: Optional[np.ndarray] = None
-    curves: list[Curve] = None
-    id: str = None
-
-    def __post_init__(self):
-        self.id = f"{self.group_name}-c{self.index}"
-
-
-class FRCSet:
-    """
-    The FRCSet represents a single measurement group, where each measurement in the group has the same
-    image dimensions, is square and is windowed to prevent FFT artifacts. I.e. they are fully preprocessed.
-    Measurements should also have occurred under similar conditions, i.e. same camera, lens, with only
-    some properties variable per image.
-    """
-    name: str
-    measurements: list[FRCMeasurement]
-
-    def __init__(self, name, measurements):
-        self.name = name
-        self.measurements = measurements
-
-
-@dataclass
-class CurveTask:
-    key: str = ''
-    method: str = '1FRC1'
-    smooth: bool = False
-    smooth_frac: float = 0.2
-    avg_n: int = None
-    threshold: str = '1/7'
-
-    def __post_init__(self):
-        if self.avg_n is None:
-            if self.method == '2FRC' or self.smooth:
-                self.avg_n = 1
-            else:
-                self.avg_n = 5
+__all__ = ['group_all', 'group_sets', 'group_measures', 'process_frc']
 
 
 @dataclass
@@ -167,7 +91,7 @@ def group_sets(curves: list[Curve]) -> dict[str, list[Curve]]:
 
 
 def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True,
-                grouping: str = 'all') -> dict[str, list[Curve]]:
+                grouping: str = 'measures') -> dict[str, list[Curve]]:
     tasks = create_tasks(frc_sets, preprocess)
     processed_measures = process_measures_conc(tasks) if concurrency else process_measures(tasks)
     processed_curves = [curve for curves in processed_measures.values() for curve in curves]

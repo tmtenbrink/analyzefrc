@@ -1,83 +1,121 @@
-from os import PathLike
-from pathlib import Path
-from PIL import Image
-from readlif.reader import LifFile
-from analyzefrc.deps_types import np
-from analyzefrc.deps_types import Union, Optional
-from analyzefrc.process import FRCMeasurement, FRCSet, FRCMeasureSettings
+from typing import Union, Optional
+
+from dataclasses import dataclass, field
+
+import numpy as np
 
 
-__all__ = ['get_lif_file', 'get_image', 'lif_read', 'image_read', 'frc1_image', 'frc2_image']
+__all__ = ['Curve',  'CurveTask', 'FRCSet', 'FRCMeasurement', 'FRCMeasureSettings', 'frc1_set', 'frc2_set', 'frc_set', 'frc_measure']
 
 
-def return_path(pth: str):
-    return Path(pth).absolute()
+@dataclass
+class FRCMeasureSettings:
+    nm_per_pixel: float
+    extra: dict = field(default_factory=dict)
+    smooth_curve: bool = False
+    NA: Optional[float] = None
+    lambda_excite_nm: Optional[float] = None
 
 
-def get_lif_file(pth: str) -> LifFile:
-    return LifFile(return_path(pth))
+@dataclass
+class Curve:
+    key: str
+
+    curve_x: np.ndarray
+    curve_y: np.ndarray
+    frc_res: float
+
+    curve_title: str
+    curve_label: str
+    desc: str
+
+    res_sd: float
+    res_y: float
+    thres: np.ndarray
+    thres_name: str
+
+    measure: 'FRCMeasurement'
 
 
-def get_image(pth: Union[str, PathLike]) -> np.array:
-    """ Uses PIL to load an image as an array in grayscale ('L' mode)."""
-    with Image.open(return_path(pth)) as im:
-        im = im.convert(mode="L")
-        return np.array(im)
-
-
-def lif_read(pth: str, debug: str = '') -> list[FRCSet]:
+@dataclass
+class FRCMeasurement:
     """
-    Read a LIF file. Assumes the scale is in pixels per um and is equal in all directions.
-    If debug is True, it will only get the first image and channel.
+    An FRCMeasurement represents a single measurement within an FRCSet and contains the actual data as
+    a DIP Image (which itself can be converted to a numpy array at no cost). If only one image is provided,
+    it will calculate a 1FRC. If two are provided, it will calculate the standard FRC between 2 images.
     """
-    images = []
-    lif_file = get_lif_file(pth)
-    imgs = lif_file.get_iter_image()
-    if debug == 'single':
-        imgs = [next(imgs)]
-    elif debug == 'two_set':
-        imgs_itered = [img for img in imgs]
-        imgs = [imgs_itered[0], imgs_itered[-1]]
-    for img in imgs:
-        pixels_per_um = img.scale[0]
-        name = img.name
-        um_per_pixel = 1 / pixels_per_um
-        nm_per_pixel = um_per_pixel * 1000
-        NA = img.settings["NumericalAperture"] if "NumericalAperture" in img.settings else None
-        lam = img.settings["StedDelayWavelength"] if "StedDelayWavelength" in img.settings else None
-        measurements = []
-        channels = img.get_iter_c(t=0, z=0)
-        if debug == 'single':
-            channels = [next(channels)]
-        elif debug == 'two_set':
-            channels_itered = [channel for channel in channels]
-            channels = [channels_itered[0], channels_itered[-1]]
-        for i, c in enumerate(channels):
-            dip_im = np.array(c)
-            settings = FRCMeasureSettings(NA=NA, lambda_excite_nm=lam, nm_per_pixel=nm_per_pixel)
-            measurement = FRCMeasurement(image=dip_im, group_name=name, index=i, settings=settings)
-            measurements.append(measurement)
-        frc_image = FRCSet(name, measurements)
-        images.append(frc_image)
-    return images
+    group_name: str
+    index: int
+    settings: FRCMeasureSettings
+    image: np.ndarray
+    curve_tasks: Optional[list] = None
+    image_2: Optional[np.ndarray] = None
+    curves: list[Curve] = None
+    id: str = None
+
+    def __post_init__(self):
+        self.update_id()
+
+    def update_id(self, index: Optional[int] = None):
+        if index is not None:
+            self.index = index
+        self.id = f"{self.group_name}-c{self.index}"
+        return self
 
 
-def image_read(pth: str, pth2: Optional[str] = None):
-    img1 = get_image(pth)
-    if pth2 is not None:
-        img2 = get_image(pth2)
-        return frc2_image(img1, img2)
-    else:
-        return frc1_image(img1)
+class FRCSet:
+    """
+    The FRCSet represents a single measurement group, where each measurement in the group has the same
+    image dimensions, is square and is windowed to prevent FFT artifacts. I.e. they are fully preprocessed.
+    Measurements should also have occurred under similar conditions, i.e. same camera, lens, with only
+    some properties variable per image.
+    """
+    name: str
+    measurements: list[FRCMeasurement]
+
+    def __init__(self, name, measurements):
+        self.name = name
+        self.measurements = measurements
 
 
-def frc1_image(img: np.ndarray, name='1FRCimage'):
-    settings = FRCMeasureSettings(1)
+@dataclass
+class CurveTask:
+    key: str = ''
+    method: str = '1FRC1'
+    smooth: bool = False
+    smooth_frac: float = 0.2
+    avg_n: int = None
+    threshold: str = '1/7'
+
+    def __post_init__(self):
+        if self.avg_n is None:
+            if self.method == '2FRC' or self.smooth:
+                self.avg_n = 1
+            else:
+                self.avg_n = 5
+
+
+
+
+
+def frc_measure(img: np.ndarray, img_2: Optional[np.ndarray] = None, set_name='FRCmeasure', nm_per_pixel=1, **kwargs):
+    settings = FRCMeasureSettings(nm_per_pixel, **kwargs)
+    return FRCMeasurement(set_name, 0, settings, img, image_2=img_2)
+
+
+def frc_set(measure: FRCMeasurement, *args: FRCMeasurement, name='FRCset'):
+    measures = (measure, *args)
+    indexed_measures = [measure.update_id(i) for i, measure in enumerate(measures)]
+    return FRCSet(name, indexed_measures)
+
+
+def frc1_set(img: np.ndarray, name='1FRCset', nm_per_pixel=1, **kwargs):
+    settings = FRCMeasureSettings(nm_per_pixel=nm_per_pixel, **kwargs)
     measurement = FRCMeasurement(name, 0, settings, img)
     return FRCSet(name, [measurement])
 
 
-def frc2_image(img1: np.ndarray, img2: np.ndarray, name='2FRCimage'):
-    settings = FRCMeasureSettings(1)
+def frc2_set(img1: np.ndarray, img2: np.ndarray, name='2FRCset', nm_per_pixel=1, **kwargs):
+    settings = FRCMeasureSettings(nm_per_pixel=nm_per_pixel, **kwargs)
     measurement = FRCMeasurement(name, 0, settings, img1, image_2=img2)
     return FRCSet(name, [measurement])
