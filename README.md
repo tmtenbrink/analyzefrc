@@ -3,6 +3,14 @@ Plots, analysis and resolution measurement of microscopy images using Fourier Ri
 
 AnalyzeFRC has native support for .lif files and can also easily read single images in formats supported by Pillow (PIL). Other formats require converting that image into a NumPy array and using that to instantiate AnalyzeFRC's native objects.
 
+### Defaults
+
+- By default, when using `frc_process`, `preprocess` is set to True. It ensures that each input image is cropped into square form and that a Tukey window is applied. Supply `proprocess=False` to disable this behavior.
+- By default, when using `frc_process`, `concurrency` is set to True. This leverages the `deco` package to leverage more cores for a 1.5x+ speedup (not higher because the most resource-intensive computations are already parallelized). !! However, please run the program inside a `if __name__ == '__main__':` block when concurrency is enabled! Otherwise it will fail! You can also disable concurrency instead by passing `concurrency=False` to `process_frc`.
+- By default, if an `FRCMeasurement` is processed without any preset `CurveTask` and has two images, it sets the method to `2FRC`. Otherwise, `1FRC` is used.
+- By default, plots are grouped by `measures`, i.e. every measurement will be plotted separately. Use the `group_<grouping>`. Other available groupings include `all` (all curves in one plot, use this only to retrieve them to use custom groupings), `sets` (all curves in the same set name in one plot) and `curves` (one plot per curve).
+
+
 ### Usage
 
 To simply compute the 1FRC of all channels of a .lif dataset and plot the results, you can do the following:
@@ -10,10 +18,12 @@ To simply compute the 1FRC of all channels of a .lif dataset and plot the result
 ```python
 import analyzefrc as afrc
 
-# ./ means relative to the current folder
-frc_sets = afrc.lif_read('/data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif')
-plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, preprocess=True, concurrency=True)
-afrc.plot_all(plot_curves)
+# This if-statement is required because concurrency is enabled
+if __name__ == '__main__':
+    # ./ means relative to the current folder
+    frc_sets = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif')
+    plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, preprocess=True, concurrency=True)
+    afrc.plot_all(plot_curves)
 ```
 
 If instead you want to plot each image inside a .lif file in a single plot, do the following:
@@ -21,7 +31,7 @@ If instead you want to plot each image inside a .lif file in a single plot, do t
 ```python
 ... # imports and processing
 
-plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, grouping='sets', preprocess=True, concurrency=True)
+plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, grouping='sets', preprocess=True, concurrency=False)
 afrc.plot_all(plot_curves)
 ```
 Or if you already computed the curves with the default grouping ('all'):
@@ -67,7 +77,7 @@ frc_2: FRCMeasurement = afrc.frc_measure(half_set_1, half_set_2, set_name='2FRC'
 frc_1: FRCMeasurement = afrc.frc_measure(full_set, set_name='1FRC')
 # Combine in one set so they can be plot together
 frc_set: FRCSet = afrc.frc_set(frc_1, frc_2, name='2FRC vs 1FRC')
-plot_curve = afrc.process_frc("2FRC vs 1FRC", frc_set)
+plot_curve = afrc.process_frc("2FRC vs 1FRC", frc_set, concurrency=False)
 afrc.plot_all(plot_curve)
 ```
 
@@ -78,6 +88,57 @@ The three operations of setting up the measurements, computing the curves and pl
 #### FRCSet, FRCMeasurement and FRCMeasureSettings
 
 For setting up the measurements in preparation of processing, these three classes are essential. `FRCSet`-objects can be completely unrelated, they share no information. As such, if doing batch processing of different datasets, they can be divided over `FRCSet`-objects.
-Within an `FRCSet`, there can be an arbitrary number of `FRCMeasurements`, which should have similar image dimensions and should, in theory, be able to be sensibly plotted in a single figure.
+Within an `FRCSet`, there can be an arbitrary number of `FRCMeasurement`-objects, which should have similar image dimensions and should, in theory, be able to be sensibly plotted in a single figure.
 
+`FRCMeasurement` is the main data container class. It can be instantiated using an `FRCMeasureSettings`-object, which contains important parameters that are the same across all images within the measurement (such as the objective's NA value). If these differ across the images, multiple measurements should be used.
 
+#### Changing default curves
+
+By default, when processing, a single `CurveTask` will be generated for each `FRCMeasurement`, meaning a single curve will be generated for each measurement. However, if a different threshold (other than the 1/7) is desired, or multiple curves per figure are wanted, a `CurveTask` can be created beforehand and given to the `FRCMeasurement`.
+
+Example:
+
+```python
+... # see .tiff example
+from analyzefrc import CurveTask
+
+# Create seperate measurement objects
+# For example we want a smoothed curve for the 1FRC, as well as a non-smoothed curve
+frc1_task_smooth = CurveTask(key='smooth_curve', smooth=True, avg_n=3, threshold='half_bit')
+frc1_task = CurveTask(key='standard_curve', avg_n=3, threshold='half_bit')
+
+frc_2: FRCMeasurement = afrc.frc_measure(half_set_1, half_set_2, set_name='2FRC')
+frc_1: FRCMeasurement = afrc.frc_measure(full_set, set_name='1FRC', curve_tasks=[frc1_task, frc1_task_smooth])
+
+... # process and plot
+```
+
+#### Changing default processing
+
+If other measurement-based processings are desired, they can be added in two ways. Arbitrary functions (of the type `MeasureProcessing = Callable[[FRCMeasurement], FRCMeasurement]`) can be run for each measurement by passing them as a list to the `extra_processings`-argument for `process_frc`, or by populating the `FRCMeasurement`-objects' `extra_processings` attribute.
+
+Note: each processing is performed in list order after the optional `preprocessing` step, with global extras performed before the measurement-defined extra processing tasks.
+
+This can be useful when using a convenience file loading function. For example, to flip every image and apply a different window functon:
+
+```python
+... # .lif example
+from analyzefrc import FRCMeasurement
+import numpy as np
+from scipy.signal import windows as wins
+
+def flip_window_data(measure: FRCMeasurement) -> FRCMeasurement:
+    measure.image = np.flip(measure.image)
+    size = measure.image.shape[0]
+    assert size == measure.image.shape[1]
+    
+    cosine = wins.tukey(size)
+    cosine_square = np.ones((size, size)) * cosine.reshape((size, 1)) * cosine.reshape((1, size))
+    measure.image = cosine_square * measure.image
+    
+    return measure
+
+plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, preprocess=False, extra_processings=[flip_window_data], concurrency=False)
+
+... # plot
+```

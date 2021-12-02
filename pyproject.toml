@@ -1,8 +1,12 @@
 [tool.poetry]
 name = "analyzefrc"
-version = "0.1.0"
-description = ""
+version = "0.1.1"
+description = "Plots, analysis and resolution measurement of microscopy images using Fourier Ring Correlation (FRC)."
 authors = ["Tip ten Brink <T.M.tenBrink@student.tudelft.nl>"]
+readme = "README.md"
+
+[tool.poetry.urls]
+"Source Code" = "https://github.com/tmtenbrink/analyzefrc"
 
 [tool.poetry.dependencies]
 python = "~3.9"
@@ -12,8 +16,6 @@ Pillow = "^8.3.2"
 loess = "^2.1.1"
 deco = "^0.6.3"
 readlif = "^0.6.5"
-pandas = "^1.3.4"
-openpyxl = "^3.0.9"
 
 [tool.poetry.dev-dependencies]
 

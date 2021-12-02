@@ -20,7 +20,7 @@ if __name__ == '__main__':
     # g = PlotGroup(j1, j2, title="TITLE")
     # g.plot()
 
-    x = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug='two_set')
+    x = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif')
     plot_curves = afrc.process_frc("XSTED_NileRed", x, concurrency=False)
     save_folder = afrc.create_save('./results', 'XSTED_NileRed', add_timestamp=True)
     afrc.plot_all(plot_curves, show=False, save=True, save_directory=save_folder, dpi=180)

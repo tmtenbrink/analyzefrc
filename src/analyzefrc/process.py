@@ -8,20 +8,18 @@ import numpy as np
 from deco import concurrent, synchronized
 from loess.loess_1d import loess_1d
 
-from analyzefrc.read import FRCMeasureSettings, FRCMeasurement, FRCSet, Curve, CurveTask
-
+from analyzefrc.read import MeasureProcessing, FRCMeasurement, FRCSet, Curve, CurveTask
 
 __all__ = ['group_all', 'group_sets', 'group_measures', 'process_frc']
 
 
 @dataclass
 class ProcessTask:
-    processings: list[Callable]
+    processings: list[MeasureProcessing]
     measure: FRCMeasurement
 
 
 def process_task(task: ProcessTask):
-    print(f"{task.measure.group_name} {task.measure.index}")
     for processing in task.processings:
         task.measure = processing(task.measure)
     return task.measure.curves
@@ -37,20 +35,24 @@ def process_task_conc(task: ProcessTask):
 @synchronized
 def process_measures_conc(measure_tasks: list[ProcessTask]) -> dict:
     processed_measures = {}
-    for task in measure_tasks:
+    task_n = len(measure_tasks)
+    for i, task in enumerate(measure_tasks):
+        print(f"Processing {i+1} out of {task_n}...")
         processed_measures[(task.measure.group_name, task.measure.index)] = process_task_conc(task)
     return processed_measures
 
 
 def process_measures(measure_tasks: list[ProcessTask]) -> dict:
     processed_measures = {}
-    for task in measure_tasks:
+    task_n = len(measure_tasks)
+    for i, task in enumerate(measure_tasks):
+        print(f"Processing {i + 1} out of {task_n}...")
         processed_measures[(task.measure.group_name, task.measure.index)] = process_task(task)
-
     return processed_measures
 
 
-def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True) -> list[ProcessTask]:
+def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True,
+                 extra_processings: Optional[list[MeasureProcessing]] = None) -> list[ProcessTask]:
     if isinstance(frc_sets, FRCSet):
         frc_sets = [frc_sets]
     process_tasks = []
@@ -60,6 +62,10 @@ def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True) -> list
                 tasks = [preprocess_measure]
             else:
                 tasks = []
+            if extra_processings is not None:
+                tasks += extra_processings
+            if measure.extra_processings is not None:
+                tasks += measure.extra_processings
             tasks.append(measure_curve)
             process_tasks.append(ProcessTask(tasks, measure))
 
@@ -68,6 +74,18 @@ def create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True) -> list
 
 def group_all(process_name: str, curves: list[Curve]) -> dict[str, list[Curve]]:
     return {process_name: curves}
+
+
+def group_curves(curves: list[Curve]) -> dict[str, list[Curve]]:
+    curve_dict = {}
+    for c in curves:
+        base_c_id = f"{c.measure.id}-{c.key}"
+        c_id = base_c_id
+        i = 0
+        while c_id in curve_dict:
+            c_id = f"{base_c_id}-{i}"
+        curve_dict[c_id] = [c]
+    return curve_dict
 
 
 def group_measures(curves: list[Curve]) -> dict[str, list[Curve]]:
@@ -91,14 +109,20 @@ def group_sets(curves: list[Curve]) -> dict[str, list[Curve]]:
 
 
 def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True,
-                grouping: str = 'measures') -> dict[str, list[Curve]]:
-    tasks = create_tasks(frc_sets, preprocess)
+                grouping: str = 'measures',
+                extra_processings: Optional[list[MeasureProcessing]] = None) -> dict[str, list[Curve]]:
+
+    print("Processing FRC sets...")
+    tasks = create_tasks(frc_sets, preprocess, extra_processings)
     processed_measures = process_measures_conc(tasks) if concurrency else process_measures(tasks)
     processed_curves = [curve for curves in processed_measures.values() for curve in curves]
+    print(f"Finished processing, returning curves grouped by {grouping}.")
     if grouping == 'sets':
         return group_sets(processed_curves)
     elif grouping == 'measures':
         return group_measures(processed_curves)
+    elif grouping == 'curves':
+        return group_curves(processed_curves)
     else:
         return group_all(process_name, processed_curves)
 

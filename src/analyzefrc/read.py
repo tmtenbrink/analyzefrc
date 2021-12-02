@@ -1,18 +1,18 @@
-from typing import Union, Optional
+from typing import Union, Optional, Callable
 
 from dataclasses import dataclass, field
 
 import numpy as np
 
 
-__all__ = ['Curve',  'CurveTask', 'FRCSet', 'FRCMeasurement', 'FRCMeasureSettings', 'frc1_set', 'frc2_set', 'frc_set', 'frc_measure']
+__all__ = ['Curve',  'CurveTask', 'FRCSet', 'MeasureProcessing', 'FRCMeasurement', 'FRCMeasureSettings', 'frc1_set',
+           'frc2_set', 'frc_set', 'frc_measure']
 
 
 @dataclass
 class FRCMeasureSettings:
     nm_per_pixel: float
     extra: dict = field(default_factory=dict)
-    smooth_curve: bool = False
     NA: Optional[float] = None
     lambda_excite_nm: Optional[float] = None
 
@@ -38,47 +38,6 @@ class Curve:
 
 
 @dataclass
-class FRCMeasurement:
-    """
-    An FRCMeasurement represents a single measurement within an FRCSet and contains the actual data as
-    a DIP Image (which itself can be converted to a numpy array at no cost). If only one image is provided,
-    it will calculate a 1FRC. If two are provided, it will calculate the standard FRC between 2 images.
-    """
-    group_name: str
-    index: int
-    settings: FRCMeasureSettings
-    image: np.ndarray
-    curve_tasks: Optional[list] = None
-    image_2: Optional[np.ndarray] = None
-    curves: list[Curve] = None
-    id: str = None
-
-    def __post_init__(self):
-        self.update_id()
-
-    def update_id(self, index: Optional[int] = None):
-        if index is not None:
-            self.index = index
-        self.id = f"{self.group_name}-c{self.index}"
-        return self
-
-
-class FRCSet:
-    """
-    The FRCSet represents a single measurement group, where each measurement in the group has the same
-    image dimensions, is square and is windowed to prevent FFT artifacts. I.e. they are fully preprocessed.
-    Measurements should also have occurred under similar conditions, i.e. same camera, lens, with only
-    some properties variable per image.
-    """
-    name: str
-    measurements: list[FRCMeasurement]
-
-    def __init__(self, name, measurements):
-        self.name = name
-        self.measurements = measurements
-
-
-@dataclass
 class CurveTask:
     key: str = ''
     method: str = '1FRC1'
@@ -95,7 +54,49 @@ class CurveTask:
                 self.avg_n = 5
 
 
+@dataclass
+class FRCMeasurement:
+    """
+    An FRCMeasurement represents a single measurement within an FRCSet and contains the actual data as
+    a NumPy array. If only one image is provided,
+    it will calculate a 1FRC. If two are provided, it will calculate the standard FRC between 2 images.
+    """
+    group_name: str
+    index: int
+    settings: FRCMeasureSettings
+    image: np.ndarray
+    extra_processings: Optional[list['MeasureProcessing']] = None
+    curve_tasks: Optional[list[CurveTask]] = None
+    image_2: Optional[np.ndarray] = None
+    curves: list[Curve] = None
+    id: str = None
 
+    def __post_init__(self):
+        self.update_id()
+
+    def update_id(self, index: Optional[int] = None):
+        if index is not None:
+            self.index = index
+        self.id = f"{self.group_name}-c{self.index}"
+        return self
+
+
+MeasureProcessing = Callable[[FRCMeasurement], FRCMeasurement]
+
+
+class FRCSet:
+    """
+    The FRCSet represents a single measurement group, where each measurement in the group has the same
+    image dimensions, is square and is windowed to prevent FFT artifacts. I.e. they are fully preprocessed.
+    Measurements should also have occurred under similar conditions, i.e. same camera, lens, with only
+    some properties variable per image.
+    """
+    name: str
+    measurements: list[FRCMeasurement]
+
+    def __init__(self, name, measurements):
+        self.name = name
+        self.measurements = measurements
 
 
 def frc_measure(img: np.ndarray, img_2: Optional[np.ndarray] = None, set_name='FRCmeasure', nm_per_pixel=1, **kwargs):
