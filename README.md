@@ -1,5 +1,7 @@
 # AnalyzeFRC
 
+[![PyPI version](https://badge.fury.io/py/analyzefrc.svg)](https://badge.fury.io/py/analyzefrc)
+
 *Developed at the Department of Imaging Physics (ImPhys), Faculty of Applied Sciences, TU Delft.*
 
 Plots, analysis and resolution measurement of microscopy images using Fourier Ring Correlation (FRC).
@@ -15,6 +17,26 @@ AnalyzeFRC provides a lot of default options and convenience functions for a spe
 - By default, if an `FRCMeasurement` is processed without any preset `CurveTask` and has two images, it sets the method to `2FRC`. Otherwise, `1FRC` is used.
 - By default, plots are grouped by `measures`, i.e. every measurement will be plotted separately. Use the `group_<grouping>`. Other available groupings include `all` (all curves in one plot, use this only to retrieve them to use custom groupings), `sets` (all curves in the same set name in one plot) and `curves` (one plot per curve).
 - By default, 1FRC curves are computed 5 times and averaged, this can be overriden by passing `override_n` to process_frc.
+
+### Installation
+
+Currently, this library only works on Python 3.9. Ensure you have a working installation. You can use tools like [pyenv](https://github.com/pyenv/pyenv) for managing Python versions. 
+
+It is recommended to install this library into a [virtual environment](https://realpython.com/python-virtual-environments-a-primer/). Many tools exist for this today (most IDEs can do it for you), but I recommend [Poetry](https://github.com/python-poetry/poetry).
+
+Install using:
+
+```shell
+pip install analyzefrc
+```
+
+If using Poetry:
+
+```shell
+poetry add analyzefrc
+```
+
+This library indirectly (through the `frc` library) depends on [rustfrc](https://github.com/tmtenbrink/rustfrc) (Rust extension) and [diplib](https://github.com/diplib) (C++ extension). These compiled extensions can sometimes cause issues, so refer to their pages as well.
 
 
 ### Usage
