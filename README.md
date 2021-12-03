@@ -1,14 +1,20 @@
 # AnalyzeFRC
+
+*Developed at the Department of Imaging Physics (ImPhys), Faculty of Applied Sciences, TU Delft.*
+
 Plots, analysis and resolution measurement of microscopy images using Fourier Ring Correlation (FRC).
 
 AnalyzeFRC has native support for .lif files and can also easily read single images in formats supported by Pillow (PIL). Other formats require converting that image into a NumPy array and using that to instantiate AnalyzeFRC's native objects.
 
-### Defaults
+AnalyzeFRC provides a lot of default options and convenience functions for a specific use case. However, its core functionality, the `measure_frc` function in `analyzefrc.process` can be adapted in other workflows. You can also directly use the [frc library](https://github.com/tmtenbrink/frc), on which this library is built.
+
+### Defaults (please read)
 
 - By default, when using `frc_process`, `preprocess` is set to True. It ensures that each input image is cropped into square form and that a Tukey window is applied. Supply `proprocess=False` to disable this behavior.
 - By default, when using `frc_process`, `concurrency` is set to True. This leverages the `deco` package to leverage more cores for a 1.5x+ speedup (not higher because the most resource-intensive computations are already parallelized). !! However, please run the program inside a `if __name__ == '__main__':` block when concurrency is enabled! Otherwise it will fail! You can also disable concurrency instead by passing `concurrency=False` to `process_frc`.
 - By default, if an `FRCMeasurement` is processed without any preset `CurveTask` and has two images, it sets the method to `2FRC`. Otherwise, `1FRC` is used.
 - By default, plots are grouped by `measures`, i.e. every measurement will be plotted separately. Use the `group_<grouping>`. Other available groupings include `all` (all curves in one plot, use this only to retrieve them to use custom groupings), `sets` (all curves in the same set name in one plot) and `curves` (one plot per curve).
+- By default, 1FRC curves are computed 5 times and averaged, this can be overriden by passing `override_n` to process_frc.
 
 
 ### Usage
@@ -142,3 +148,25 @@ plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, preprocess=False, extr
 
 ... # plot
 ```
+
+#### Other internal details
+
+The general processing flow is as follows:
+
+1. (`read`/`read_file`) Create `FRCMeasureSettings` based on data acquisition parameters
+2. (`read`/`read_file`) Create `FRCMeasurement` using the previous step.
+3. (Optionally) create custom `CurveTask`-objects for the `FRCMeasurement`. Created by default in the `process` step if not provided.
+4. (`read`/`read_file`) Create `FRCSet` using multiple `FRCMeasurement`-objects.
+5. (`process`) Compute `Curve`-objects using `measure_frc`.
+6. (`process`) Sort/group the `Curve`-objects into a dictionary with lists of `Curve`-objects as entries.
+7. (`plot`) Plot the `list[Curve]`-dictionary, where each entry becomes a single figure.
+
+All steps besides the `measure_frc`-step can be implemented in a custom way quite trivially. In a way, all steps except step 5 are for your convenience. Step 5, which is the only step that involves actually processing all the data using the `frc` library, forms the core of this package.
+
+### Performance
+
+Processing 32 measurements of 1024x1024 pixels takes about thirty seconds to read from a .lif file, process (computing each curve 5 times) and plot on my i7-8750H laptop CPU (which is decently performant even by today's standards). 
+
+Over 80% of the time is spent processing, i.e. performing the binomial splitting and computing the FRCs (with the latter taking significantly longer). All these functions are implemented through Rust (rustfrc), C++ (diplib) or C (numpy) extensions, meaning they are as fast as can be.
+
+10-15% of the time is spent plotting using matplotlib, meaning the overhead of this library is only 5-10%. 

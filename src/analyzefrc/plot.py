@@ -1,7 +1,10 @@
+# Copyright (C) 2021                Department of Imaging Physics
+# All rights reserved               Faculty of Applied Sciences
+#                                   TU Delft
+# Tip ten Brink
+
 from typing import Union, Callable
 
-import time
-import pathlib as path
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -13,6 +16,7 @@ __all__ = ['CurvePlot', 'plot_all']
 
 
 class CurvePlot:
+    """ Represents a series of curves to be plotted in one figure. """
     title: str
     curves: list[Curve]
 
@@ -72,6 +76,15 @@ class CurvePlot:
 
 
 def plot_all(*multiple_groups: dict[str, list[Curve]], show=True, save=False, save_directory=None, dpi=180):
+    """
+    Plot each entry in the supplied dictionaries (can be separate arguments) in a single plot.
+
+    :param multiple_groups: Multiple dictionaries containing lists of Curves. Each entry is a plot.
+    :param bool show: Show the plot.
+    :param bool save: Save each plot as an image, requires save_directory.
+    :param save_directory: Exact directory where each plot can be saved. Use analyzefrc.helper.create_save.
+    :param dpi: Plot image size.
+    """
     curve_plots = []
     for multiple_group in multiple_groups:
         for group_name, group in multiple_group.items():
