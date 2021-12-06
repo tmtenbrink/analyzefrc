@@ -20,6 +20,26 @@ AnalyzeFRC provides a lot of default options and convenience functions for a spe
 
 ### Installation
 
+#### With (Ana)conda
+
+If you already have Anaconda installed (or miniconda), it is easiest to create a new Python 3.9 environment (here 'envanalyze' can be any environment name you like). Open the Anaconda/miniconda3 prompt and write:
+
+```shell
+conda create -n 'envanalyze' python=3.9
+```
+
+This package depends on a number of PyPI-only packages, some also with compiled extensions, which are difficult to port to conda. For this reason, it is recommended to have a seperate environment with only this package and then install using pip:
+
+```shell
+conda activate envanalyze
+pip install analyzefrc
+```
+
+You now have an environment called 'envanalyze' with analyzefrc installed. Configure your favorite IDE to use the newly created environment and you're good to go!  See the usage examples for more details on how to use this package.
+
+
+#### Without conda
+
 Currently, this library only works on Python 3.9. Ensure you have a working installation. You can use tools like [pyenv](https://github.com/pyenv/pyenv) for managing Python versions. 
 
 It is recommended to install this library into a [virtual environment](https://realpython.com/python-virtual-environments-a-primer/). Many tools exist for this today (most IDEs can do it for you), but I recommend [Poetry](https://github.com/python-poetry/poetry).
