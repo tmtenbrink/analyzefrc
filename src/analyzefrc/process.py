@@ -2,9 +2,9 @@
 # All rights reserved               Faculty of Applied Sciences
 #                                   TU Delft
 # Tip ten Brink
-
+from concurrent.futures import ProcessPoolExecutor
 from typing import Optional, Union
-
+from functools import partial
 from dataclasses import dataclass
 from frc.deps_types import NoIntersectionException
 import frc.frc_functions as frcf
@@ -44,6 +44,18 @@ def _process_measures_conc(measure_tasks: list[_ProcessTask]) -> dict:
     for i, task in enumerate(measure_tasks):
         print(f"Processing {i + 1} out of {task_n}...")
         processed_measures[(task.measure.group_name, task.measure.index)] = _process_task_conc(task)
+    print("Returning!")
+    return processed_measures
+
+
+def _process_measures_pool_exec(measure_tasks: list[_ProcessTask]) -> dict:
+    processed_measures = {}
+    task_n = len(measure_tasks)
+    with ProcessPoolExecutor() as executor:
+        for i, task in enumerate(measure_tasks):
+            print(f"Processing {i + 1} out of {task_n}...")
+            future = executor.submit(_process_task, task)
+            processed_measures[(task.measure.group_name, task.measure.index)] = future.result()
     return processed_measures
 
 
@@ -73,8 +85,7 @@ def _create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True,
             if measure.extra_processings is not None:
                 tasks += measure.extra_processings
 
-            def override_n_measure(msr):
-                return measure_curve(msr, override_n)
+            override_n_measure = partial(measure_curve, override_n=override_n)
 
             tasks.append(override_n_measure)
             process_tasks.append(_ProcessTask(tasks, measure))
@@ -142,7 +153,7 @@ def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], prepro
     """
     print("Processing FRC sets...")
     tasks = _create_tasks(frc_sets, preprocess, extra_processings, override_n)
-    processed_measures = _process_measures_conc(tasks) if concurrency else _process_measures(tasks)
+    processed_measures = _process_measures_pool_exec(tasks) if concurrency else _process_measures(tasks)
     processed_curves = [curve for curves in processed_measures.values() for curve in curves]
     print(f"Finished processing, returning curves grouped by {grouping}.")
     if grouping == 'sets':
