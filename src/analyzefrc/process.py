@@ -42,7 +42,7 @@ def _process_measures_conc(measure_tasks: list[_ProcessTask]) -> dict:
     processed_measures = {}
     task_n = len(measure_tasks)
     for i, task in enumerate(measure_tasks):
-        print(f"Processing {i+1} out of {task_n}...")
+        print(f"Processing {i + 1} out of {task_n}...")
         processed_measures[(task.measure.group_name, task.measure.index)] = _process_task_conc(task)
     return processed_measures
 
@@ -72,7 +72,11 @@ def _create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True,
                 tasks += extra_processings
             if measure.extra_processings is not None:
                 tasks += measure.extra_processings
-            tasks.append(lambda msr: measure_curve(msr, override_n))
+
+            def override_n_measure(msr):
+                return measure_curve(msr, override_n)
+
+            tasks.append(override_n_measure)
             process_tasks.append(_ProcessTask(tasks, measure))
 
     return process_tasks
