@@ -12,8 +12,8 @@ AnalyzeFRC provides a lot of default options and convenience functions for a spe
 
 ### Defaults (please read)
 
-- By default, when using `frc_process`, `preprocess` is set to True. It ensures that each input image is cropped into square form and that a Tukey window is applied. Supply `proprocess=False` to disable this behavior.
-- By default, when using `frc_process`, `concurrency` is set to True. This leverages the `deco` package to leverage more cores for a 1.5x+ speedup (not higher because the most resource-intensive computations are already parallelized). !! However, please run the program inside a `if __name__ == '__main__':` block when concurrency is enabled! Otherwise it will fail! You can also disable concurrency instead by passing `concurrency=False` to `process_frc`.
+- By default, when using `process_frc`, `preprocess` is set to True. It ensures that each input image is cropped into square form and that a Tukey window is applied. Supply `proprocess=False` to disable this behavior.
+- By default, when using `process_frc`, `concurrency` is set to False. If set to true by passing `concurrency=True`, it leverages the `deco` package to leverage more cores for a 1.5x+ speedup (not higher because the most resource-intensive computations are already parallelized). !! However, please run the program inside a `if __name__ == '__main__':` block when concurrency is enabled! Otherwise it will fail! Note: on some platforms, this type of concurrency can cause issues, notably Linux and macOS. This is a problem caused by a dependency.
 - By default, if an `FRCMeasurement` is processed without any preset `CurveTask` and has two images, it sets the method to `2FRC`. Otherwise, `1FRC` is used.
 - By default, plots are grouped by `measures`, i.e. every measurement will be plotted separately. Use the `group_<grouping>`. Other available groupings include `all` (all curves in one plot, use this only to retrieve them to use custom groupings), `sets` (all curves in the same set name in one plot) and `curves` (one plot per curve).
 - By default, 1FRC curves are computed 5 times and averaged, this can be overriden by passing `override_n` to process_frc.
@@ -22,7 +22,7 @@ AnalyzeFRC provides a lot of default options and convenience functions for a spe
 
 #### With (Ana)conda
 
-If you already have Anaconda installed (or miniconda), it is easiest to create a new Python 3.9 environment (here 'envanalyze' can be any environment name you like). Open the Anaconda/miniconda3 prompt and write:
+If you already have Anaconda installed (or miniconda), it is easiest to create a new Python 3.9 environment. Open the Anaconda/miniconda3 prompt and write (here 'envanalyze' can be any environment name you like):
 
 ```shell
 conda create -n 'envanalyze' python=3.9
@@ -61,6 +61,8 @@ This library indirectly (through the `frc` library) depends on [rustfrc](https:/
 
 ### Usage
 
+#### Default .lif processing
+
 To simply compute the 1FRC of all channels of a .lif dataset and plot the results, you can do the following:
 
 ```python
@@ -70,9 +72,11 @@ import analyzefrc as afrc
 if __name__ == '__main__':
     # ./ means relative to the current folder
     frc_sets = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif')
-    plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, preprocess=True, concurrency=True)
+    plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, preprocess=True)
     afrc.plot_all(plot_curves)
 ```
+
+#### Plot series in one plot
 
 If instead you want to plot each image inside a .lif file in a single plot, do the following:
 
@@ -82,6 +86,9 @@ If instead you want to plot each image inside a .lif file in a single plot, do t
 plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, grouping='sets', preprocess=True, concurrency=False)
 afrc.plot_all(plot_curves)
 ```
+
+##### Change grouping after computation
+
 Or if you already computed the curves with the default grouping ('all'):
 
 ```python
@@ -91,17 +98,40 @@ frc_per_set_sets = afrc.group_sets(plot_curves)
 plot_all(frc_per_set_sets)
 ```
 
+#### Save instead of plot
+
 If you don't want to plot the results (in the case of many images the IDE plot buffer can easily be exceeded), but instead save them:
 
 ```python
 ... # imports and processing
-import analyzefrc as afrc
 
 # Will save to './results/<timestamp>-XSTED_NileRed'
 save_folder = afrc.create_save('./results', 'XSTED_NileRed', add_timestamp=True)
 afrc.plot_all(plot_curves, show=False, save=True, save_directory=save_folder, dpi=180)
 
 ```
+
+#### Only extract data, don't plot
+
+Plotting using your own tools can also be desired. To extract only the resulting data, do not call `plot_all`. Instead, use the result of `process_frc`, which yields a dictionary of lists of `Curve`-objects. A `Curve`-object is simply a data container for NumPy arrays and metadata. An example:
+
+```python
+... # imports and data reading
+from analyzefrc import Curve
+import matplotlib.pyplot as plt
+
+plot_curves: dict[str, list[Curve]] = afrc.process_frc("XSTED_NileRed", frc_sets, grouping='sets', preprocess=True)
+
+# plot all on your own
+for curves in plot_curves.values():
+    first_curve: Curve = curves[0]
+    plt.plot(first_curve.curve_x, first_curve.curve_y)
+    plt.plot(first_curve.curve_x, first_curve.thres)
+    plt.show()
+
+```
+
+#### Example: 1FRC vs 2FRC from .tiff
 
 A slightly more complex example: If you have a sample .tiff file and you want to compare the performance of 1FRC vs 2FRC, you could do the following:
 
@@ -209,6 +239,6 @@ All steps besides the `measure_frc`-step can be implemented in a custom way quit
 
 Processing 32 measurements of 1024x1024 pixels takes about thirty seconds to read from a .lif file, process (computing each curve 5 times) and plot on my i7-8750H laptop CPU (which is decently performant even by today's standards). 
 
-Over 80% of the time is spent processing, i.e. performing the binomial splitting and computing the FRCs (with the latter taking significantly longer). All these functions are implemented through Rust (rustfrc), C++ (diplib) or C (numpy) extensions, meaning they are as fast as can be.
+Over 80% of the time is spent processing, i.e. performing the binomial splitting and computing the FRCs (with the latter taking significantly longer). All these functions are implemented through Rust (rustfrc), C++ (diplib) or C (numpy) extensions, meaning they are as fast as can be and mostly parallelized.
 
 10-15% of the time is spent plotting using matplotlib, meaning the overhead of this library is only 5-10%. 

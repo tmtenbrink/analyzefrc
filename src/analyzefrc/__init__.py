@@ -8,3 +8,5 @@ from analyzefrc.process import *
 from analyzefrc.plot import *
 from analyzefrc.file_read import *
 from analyzefrc.helper import *
+
+__version__ = '0.1.5'

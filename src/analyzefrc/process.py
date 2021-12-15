@@ -24,14 +24,16 @@ class _ProcessTask:
     measure: FRCMeasurement
 
 
-def _process_task(task: _ProcessTask) -> list[Curve]:
+def _process_task(task: _ProcessTask, i, task_n) -> list[Curve]:
+    print(f"Processing {i + 1} out of {task_n}...")
     for processing in task.processings:
         task.measure = processing(task.measure)
     return task.measure.curves
 
 
 @concurrent
-def _process_task_conc(task: _ProcessTask):
+def _process_task_conc(task: _ProcessTask, i, task_n):
+    print(f"Processing {i + 1} out of {task_n}...")
     for processing in task.processings:
         task.measure = processing(task.measure)
     return task.measure.curves
@@ -42,20 +44,7 @@ def _process_measures_conc(measure_tasks: list[_ProcessTask]) -> dict:
     processed_measures = {}
     task_n = len(measure_tasks)
     for i, task in enumerate(measure_tasks):
-        print(f"Processing {i + 1} out of {task_n}...")
-        processed_measures[(task.measure.group_name, task.measure.index)] = _process_task_conc(task)
-    print("Returning!")
-    return processed_measures
-
-
-def _process_measures_pool_exec(measure_tasks: list[_ProcessTask]) -> dict:
-    processed_measures = {}
-    task_n = len(measure_tasks)
-    with ProcessPoolExecutor() as executor:
-        for i, task in enumerate(measure_tasks):
-            print(f"Processing {i + 1} out of {task_n}...")
-            future = executor.submit(_process_task, task)
-            processed_measures[(task.measure.group_name, task.measure.index)] = future.result()
+        processed_measures[(task.measure.group_name, task.measure.index)] = _process_task_conc(task, i, task_n)
     return processed_measures
 
 
@@ -63,8 +52,7 @@ def _process_measures(measure_tasks: list[_ProcessTask]) -> dict[str, list[Curve
     processed_measures = {}
     task_n = len(measure_tasks)
     for i, task in enumerate(measure_tasks):
-        print(f"Processing {i + 1} out of {task_n}...")
-        processed_measures[task.measure.id] = _process_task(task)
+        processed_measures[task.measure.id] = _process_task(task, i, task_n)
     return processed_measures
 
 
@@ -133,7 +121,7 @@ def group_sets(curves: list[Curve]) -> dict[str, list[Curve]]:
     return group_dict
 
 
-def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=True,
+def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=False,
                 grouping: str = 'measures', override_n: int = 0,
                 extra_processings: Optional[list[MeasureProcessing]] = None) -> dict[str, list[Curve]]:
     """
@@ -153,7 +141,7 @@ def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], prepro
     """
     print("Processing FRC sets...")
     tasks = _create_tasks(frc_sets, preprocess, extra_processings, override_n)
-    processed_measures = _process_measures_pool_exec(tasks) if concurrency else _process_measures(tasks)
+    processed_measures = _process_measures_conc(tasks) if concurrency else _process_measures(tasks)
     processed_curves = [curve for curves in processed_measures.values() for curve in curves]
     print(f"Finished processing, returning curves grouped by {grouping}.")
     if grouping == 'sets':

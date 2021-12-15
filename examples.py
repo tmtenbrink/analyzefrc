@@ -20,10 +20,23 @@ if __name__ == '__main__':
     # g = PlotGroup(j1, j2, title="TITLE")
     # g.plot()
 
-    # x = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif')
-    # plot_curves = afrc.process_frc("XSTED_NileRed", x, concurrency=False)
+    frc_sets = afrc.lif_read('./data/sted/2021_10_05_XSTED_NileRed_variation_excitation_power_MLampe.lif', debug='two_set')
+    # plot_curves = afrc.process_frc("XSTED_NileRed", frc_sets, concurrency=True)
     # save_folder = afrc.create_save('./results', 'XSTED_NileRed', add_timestamp=True)
     # afrc.plot_all(plot_curves, show=False, save=True, save_directory=save_folder, dpi=180)
+    # print()
+
+    from analyzefrc import Curve
+    import matplotlib.pyplot as plt
+
+    plot_curves: dict[str, list[Curve]] = afrc.process_frc("XSTED_NileRed", frc_sets, grouping='sets', preprocess=True)
+
+    # plot all on your own
+    for curves in plot_curves.values():
+        first_curve: Curve = curves[0]
+        plt.plot(first_curve.curve_x, first_curve.curve_y)
+        plt.plot(first_curve.curve_x, first_curve.thres)
+        plt.show()
     print()
 
 print()
@@ -40,3 +53,4 @@ print()
 # channel_list = [i for i in img_1.get_iter_c(t=0, z=0)]
 # img = np.array(channel_list[0])
 # single_curve(img, nm_pix_fact)
+
