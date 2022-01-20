@@ -63,8 +63,8 @@ def lif_read(pth: str, debug: str = '') -> list[FRCSet]:
             channels = [channels_itered[0], channels_itered[-1]]
         for i, c in enumerate(channels):
             dip_im = np.array(c)
-            settings = FRCMeasureSettings(NA=NA, lambda_excite_nm=lam, nm_per_pixel=nm_per_pixel)
-            measurement = FRCMeasurement(image=dip_im, group_name=name, index=i, settings=settings)
+            settings = FRCMeasureSettings(NA=NA, lambda_excite_nm=lam, len_per_pixel=nm_per_pixel, len_unit='nm')
+            measurement = FRCMeasurement(image=dip_im, set_id=name, index=i, settings=settings)
             measurements.append(measurement)
         frc_image = FRCSet(name, measurements)
         images.append(frc_image)

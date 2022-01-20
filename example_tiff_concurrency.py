@@ -13,9 +13,9 @@ half_set_2 = np.array(dip.PoissonNoise(data_dip / 2))
 full_set = np.array(dip.PoissonNoise(data_dip))
 
 if __name__ == '__main__':
-    for i in range(3):
-        frc_2: FRCMeasurement = afrc.frc_measure(half_set_1, half_set_2, set_name='2FRC vs 1FRC')
-        frc_1: FRCMeasurement = afrc.frc_measure(full_set, set_name='2FRC vs 1FRC')
-        frc_set: FRCSet = afrc.frc_set(frc_1, frc_2, name='2FRC vs 1FRC')
-        plot_curve = afrc.process_frc("2FRC vs 1FRC", frc_set, concurrency=True, grouping='sets')
-# afrc.plot_all(plot_curve)
+    for i in range(1):
+        frc_2: FRCMeasurement = afrc.frc_measure(half_set_1, half_set_2, name='2FRC')
+        frc_1: FRCMeasurement = afrc.frc_measure(full_set, name='1FRC')
+        frc_set: FRCSet = afrc.frc_set(frc_1, frc_2, name='2FRC vs 1FRC', len_unit='px')
+        plot_curve = afrc.process_frc("2FRC vs 1FRC", frc_set, concurrency=False, grouping='sets')
+afrc.plot_all(plot_curve)

@@ -20,8 +20,9 @@ class FRCMeasureSettings:
     """
     Dataclass containing information about a specific FRCMeasurement. The scale (nm_per_pixel) is the most important.
     """
-    nm_per_pixel: float
+    len_per_pixel: float
     extra: dict = field(default_factory=dict)  # Mutable variable requires special initializer
+    len_unit: str = 'nm'
     NA: Optional[float] = None  # Numerical aperture
     lambda_excite_nm: Optional[float] = None  # Excitation wavelength
 
@@ -83,15 +84,16 @@ class FRCMeasurement:
     a NumPy array. If only one image is provided, it will calculate a 1FRC. If two are provided, it will calculate the
     standard FRC between 2 images.
     """
-    group_name: str  # Should correspond to the FRCSet
+    set_id: str  # Should correspond to the FRCSet
     index: int  # Should be unique within an FRCSet, use frc_set(...) to index automatically
     settings: FRCMeasureSettings
     image: np.ndarray  # Image data
+    name: str = ""
     extra_processings: Optional[list['MeasureProcessing']] = None  # Optional processing steps to be performed curve
     curve_tasks: Optional[list[CurveTask]] = None  # Curves to be computed from the measurement
     image_2: Optional[np.ndarray] = None  # Used for 2FRC
     curves: list[Curve] = None  # Output curves, set after processing
-    id: str = None  # Unique overall if updated and if group_name and index are unique
+    id: str = None  # Unique overall if updated and if set_id and index are unique
 
     def __post_init__(self):
         self.update_id()
@@ -99,7 +101,7 @@ class FRCMeasurement:
     def update_id(self, index: Optional[int] = None) -> 'FRCMeasurement':
         if index is not None:
             self.index = index
-        self.id = f"{self.group_name}-c{self.index}"
+        self.id = f"{self.set_id}-c{self.index}"
         return self
 
 
@@ -122,37 +124,44 @@ class FRCSet:
         self.measurements = measurements
 
 
-def frc_measure(img: np.ndarray, img_2: Optional[np.ndarray] = None, set_name='FRCmeasure', nm_per_pixel=1,
+def frc_measure(img: np.ndarray, img_2: Optional[np.ndarray] = None, name='', set_name='', len_per_pixel=1,
                 **kwargs) -> FRCMeasurement:
-    """ Convenience function to get an FRCMeasurement (with 1 or 2 images) from image data. """
-    settings = FRCMeasureSettings(nm_per_pixel, **kwargs)
-    return FRCMeasurement(set_name, 0, settings, img, image_2=img_2)
+    """ Convenience function to get an FRCMeasurement (with 1 or 2 images) from image data.
+     Using frc_set on measurements overwrites the set_name. """
+    settings = FRCMeasureSettings(len_per_pixel, **kwargs)
+    return FRCMeasurement(set_name, 0, settings, img, name=name, image_2=img_2)
 
 
-def frc_set(measure: FRCMeasurement, *args: FRCMeasurement, name='FRCset') -> FRCSet:
+def frc_set(measure: FRCMeasurement, *args: FRCMeasurement, name='', len_unit=None) -> FRCSet:
     """
     Convenience function to get an FRCSet from an arbitrary amount of FRCMeasurements.
+    Overwrites measurement set_id.
     """
     measures = (measure, *args)
-    indexed_measures = [measure.update_id(i) for i, measure in enumerate(measures)]
+    indexed_measures = []
+    for i, measure in enumerate(measures):
+        if len_unit is not None:
+            measure.settings.len_unit = len_unit
+        measure.set_id = name
+        indexed_measures.append(measure.update_id(i))
     return FRCSet(name, indexed_measures)
 
 
-def frc1_set(img: np.ndarray, name='1FRCset', nm_per_pixel=1, **kwargs) -> FRCSet:
+def frc1_set(img: np.ndarray, name='1FRCset', len_per_pixel=1, **kwargs) -> FRCSet:
     """
     Convenience function to get an FRCSet directly from image data.
     Additional keyword arguments are passed to FRCMeasureSettings instantiation.
     """
-    settings = FRCMeasureSettings(nm_per_pixel=nm_per_pixel, **kwargs)
+    settings = FRCMeasureSettings(len_per_pixel=len_per_pixel, **kwargs)
     measurement = FRCMeasurement(name, 0, settings, img)
     return FRCSet(name, [measurement])
 
 
-def frc2_set(img1: np.ndarray, img2: np.ndarray, name='2FRCset', nm_per_pixel=1, **kwargs):
+def frc2_set(img1: np.ndarray, img2: np.ndarray, name='2FRCset', len_per_pixel=1, **kwargs):
     """
     Convenience function to get an FRCSet directly from image data for 2FRC.
     Additional keyword arguments are passed to FRCMeasureSettings instantiation.
     """
-    settings = FRCMeasureSettings(nm_per_pixel=nm_per_pixel, **kwargs)
+    settings = FRCMeasureSettings(len_per_pixel=len_per_pixel, **kwargs)
     measurement = FRCMeasurement(name, 0, settings, img1, image_2=img2)
     return FRCSet(name, [measurement])

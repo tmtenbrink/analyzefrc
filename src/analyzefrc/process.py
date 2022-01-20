@@ -44,7 +44,7 @@ def _process_measures_conc(measure_tasks: list[_ProcessTask]) -> dict:
     processed_measures = {}
     task_n = len(measure_tasks)
     for i, task in enumerate(measure_tasks):
-        processed_measures[(task.measure.group_name, task.measure.index)] = _process_task_conc(task, i, task_n)
+        processed_measures[(task.measure.set_id, task.measure.index)] = _process_task_conc(task, i, task_n)
     return processed_measures
 
 
@@ -114,10 +114,10 @@ def group_sets(curves: list[Curve]) -> dict[str, list[Curve]]:
     """ Grouped so all curves per set will be plotted together. """
     group_dict = {}
     for c in curves:
-        if c.measure.group_name not in group_dict:
-            group_dict[c.measure.group_name] = [c]
+        if c.measure.set_id not in group_dict:
+            group_dict[c.measure.set_id] = [c]
         else:
-            group_dict[c.measure.group_name].append(c)
+            group_dict[c.measure.set_id].append(c)
     return group_dict
 
 
@@ -174,10 +174,10 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
     # Can be None
     img2 = measure.image_2
     img_size = img.shape[0]
-    nm_per_pixel = measure.settings.nm_per_pixel
+    len_per_pixel = measure.settings.len_per_pixel
     # For correct dimensions we use the first curve calculation below
     xs_pix = None
-    xs_nm_freq = None
+    xs_len_freq = None
 
     # Initialize default curve tasks
     if measure.curve_tasks is None:
@@ -206,7 +206,7 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
 
         # Only calculate the first time
         xs_pix = np.arange(len(frc_curve)) / img_size if xs_pix is None else xs_pix
-        xs_nm_freq = xs_pix * (1 / nm_per_pixel) if xs_nm_freq is None else xs_nm_freq
+        xs_len_freq = xs_pix * (1 / len_per_pixel) if xs_len_freq is None else xs_len_freq
 
         # Curve averaging
         frc_curves = [frc_curve]
@@ -217,15 +217,19 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
 
         frc_curve /= curve_task.avg_n
 
-        label = curve_task.method
+        curve_key = f"{measure.name}"
+
+        if len(measure.curve_tasks) > 1:
+            curve_key += f"-curve {curve_i}"
+        label = curve_key
 
         smooth_desc = ""
         if curve_task.smooth:
-            smooth_desc = " LOESS smoothing (point frac: {}).".format(curve_task.smooth_frac)
+            smooth_desc = " LOESS smoothing (point frac: {}). ".format(curve_task.smooth_frac)
             xs_pix, frc_curve, wout = loess_1d(xs_pix, frc_curve, frac=curve_task.smooth_frac)
 
         frc_res = -1
-        sd_str = " "
+        sd_str = ""
 
         res_sd = 0
         res_y = 0
@@ -233,12 +237,12 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
 
         # Try catch-block since it is possible no resolution could be computed
         try:
-            frc_res, res_y, thres = frcf.frc_res(xs_nm_freq, frc_curve, img_size, threshold=curve_task.threshold)
+            frc_res, res_y, thres = frcf.frc_res(xs_len_freq, frc_curve, img_size, threshold=curve_task.threshold)
             thres_curve = thres(xs_pix)
             frc_res_list = []
             for res_curve in frc_curves:
                 try:
-                    frc_res, _, _ = frcf.frc_res(xs_nm_freq, res_curve, img_size, threshold=curve_task.threshold)
+                    frc_res, _, _ = frcf.frc_res(xs_len_freq, res_curve, img_size, threshold=curve_task.threshold)
                     frc_res_list.append(frc_res)
                 except NoIntersectionException:
                     pass
@@ -248,14 +252,15 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
 
         except NoIntersectionException as e:
             print(e)
+
         avg_desc = f"{curve_task.avg_n} curves averaged." if curve_task.avg_n > 1 else ""
-        desc = "Resolution ({} threshold): {:.3g} {}nm. {} {}".format(curve_task.threshold, frc_res, sd_str,
-                                                                      smooth_desc,
-                                                                      avg_desc)
+        desc = "Resolution ({} threshold) for {}: {:.3g} {}{}. {}{}".format(curve_task.threshold, curve_key, frc_res,
+                                                                            sd_str, measure.settings.len_unit,
+                                                                            smooth_desc, avg_desc)
 
         # Create curve object
-        curve = Curve(f"{measure.group_name}-{measure.index}-{curve_i}", xs_nm_freq, frc_curve, frc_res,
-                      f"{measure.group_name} measurement {measure.index}", label, desc,
+        curve = Curve(curve_key, xs_len_freq, frc_curve, frc_res,
+                      f"{curve_key}", label, desc,
                       res_sd, res_y, thres_curve, curve_task.threshold, measure)
         curves.append(curve)
     measure.curves = curves
