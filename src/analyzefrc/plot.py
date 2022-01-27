@@ -35,7 +35,7 @@ class CurvePlot:
         self.curves = curves
         self.len_unit = len_unit
 
-    def plot(self, show=False, save=False, save_directory: Path = None, ax_fig_ops: Callable = None, dpi=180,
+    def plot(self, show=False, save=False, save_directory: Path = None, desc_mode='supx', ax_fig_ops: Callable = None, dpi=180,
              save_kwargs: Optional[dict] = None):
 
         min_y = -0.1
@@ -84,7 +84,12 @@ class CurvePlot:
 
         ax.set_title(self.title)
 
-        fig.supxlabel('\n'.join(descs), fontsize='small')
+        if desc_mode == 'supx':
+            fig.supxlabel('\n'.join(descs), fontsize='small')
+        elif desc_mode == 'print':
+            print('\n'.join(descs))
+        else:
+            raise ValueError("Unknown value for 'desc_mode'!")
         fig.set_tight_layout(True)
 
         if ax_fig_ops is not None:
@@ -104,8 +109,8 @@ class CurvePlot:
         plt.close(fig)
 
 
-def plot_all(*multiple_groups: dict[str, list[Curve]], show=True, save=False, save_directory=None, dpi=180,
-             ax_fig_ops: Optional[Callable] = None):
+def plot_all(*multiple_groups: dict[str, list[Curve]], show=True, save=False, desc_mode='supx', save_directory=None,
+             dpi=180, ax_fig_ops: Optional[Callable] = None):
     """
     Plot each entry in the supplied dictionaries (can be separate arguments) in a single plot.
 
@@ -125,4 +130,5 @@ def plot_all(*multiple_groups: dict[str, list[Curve]], show=True, save=False, sa
                 len_unit = group[0].measure.settings.len_unit
             curve_plots.append(CurvePlot(group, title=title, len_unit=len_unit))
     for curve_plot in curve_plots:
-        curve_plot.plot(show=show, save=save, save_directory=save_directory, dpi=dpi, ax_fig_ops=ax_fig_ops)
+        curve_plot.plot(show=show, save=save, save_directory=save_directory, desc_mode=desc_mode, dpi=dpi,
+                        ax_fig_ops=ax_fig_ops)
