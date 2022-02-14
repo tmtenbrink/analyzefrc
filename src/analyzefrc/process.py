@@ -58,7 +58,7 @@ def _process_measures(measure_tasks: list[_ProcessTask]) -> dict[str, list[Curve
 
 def _create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True,
                   extra_processings: Optional[list[MeasureProcessing]] = None,
-                  override_n: int = 0) -> list[_ProcessTask]:
+                  override_n: int = 0, frc1_method: int = 1) -> list[_ProcessTask]:
     if isinstance(frc_sets, FRCSet):
         frc_sets = [frc_sets]
     process_tasks = []
@@ -73,7 +73,7 @@ def _create_tasks(frc_sets: Union[list[FRCSet], FRCSet], preprocess=True,
             if measure.extra_processings is not None:
                 tasks += measure.extra_processings
 
-            override_n_measure = partial(measure_curve, override_n=override_n)
+            override_n_measure = partial(measure_curve, override_n=override_n, frc1_method=frc1_method)
 
             tasks.append(override_n_measure)
             process_tasks.append(_ProcessTask(tasks, measure))
@@ -122,7 +122,7 @@ def group_sets(curves: list[Curve]) -> dict[str, list[Curve]]:
 
 
 def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], preprocess=True, concurrency=False,
-                grouping: str = 'measures', override_n: int = 0,
+                grouping: str = 'measures', override_n: int = 0, frc1_method: int = 1,
                 extra_processings: Optional[list[MeasureProcessing]] = None) -> dict[str, list[Curve]]:
     """
     Process prepared FRCSets and compute curves.
@@ -136,11 +136,12 @@ def process_frc(process_name: str, frc_sets: Union[list[FRCSet], FRCSet], prepro
         FRCMeasurement are grouped together.
     :param int override_n: Override the default number of curves calculated and averaged. Will override even custom-set
         options for *all* curves.
+    :param int frc1_method: Override the 1FRC method used. Defaults to single split and then subtract.
     :param extra_processings: Additional processing functions that are performed after preprocessing and before
         per-measurement extra processings.
     """
     print("Processing FRC sets...")
-    tasks = _create_tasks(frc_sets, preprocess, extra_processings, override_n)
+    tasks = _create_tasks(frc_sets, preprocess, extra_processings, override_n, frc1_method)
     processed_measures = _process_measures_conc(tasks) if concurrency else _process_measures(tasks)
     processed_curves = [curve for curves in processed_measures.values() for curve in curves]
     print(f"Finished processing, returning curves grouped by {grouping}.")
@@ -168,7 +169,7 @@ def preprocess_img(img: np.ndarray) -> np.ndarray:
     return util.apply_tukey(img)
 
 
-def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasurement:
+def measure_curve(measure: FRCMeasurement, override_n: int = 0, frc1_method: int = 1) -> FRCMeasurement:
     """ Compute curves for an FRCMeasurement. """
     img = measure.image
     # Can be None
@@ -182,7 +183,11 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
     # Initialize default curve tasks
     if measure.curve_tasks is None:
         if measure.image_2 is None:
-            measure.curve_tasks = [CurveTask(key='curve1')]
+            if frc1_method == 2:
+                method_str = '1FRC2'
+            else:
+                method_str = '1FRC'
+            measure.curve_tasks = [CurveTask(key='curve1', method=method_str)]
         else:
             measure.curve_tasks = [CurveTask(key='curve1', method='2FRC', avg_n=1)]
 
@@ -199,6 +204,10 @@ def measure_curve(measure: FRCMeasurement, override_n: int = 0) -> FRCMeasuremen
         elif curve_task.method == '2FRC':
             def frc_func(img_frc_1, img_frc_2):
                 return frcf.two_frc(img_frc_1, img_frc_2)
+        elif curve_task.method == '1FRC2':
+            # Experimental
+            def frc_func(img_frc, _img2):
+                return frcf.one_frc(img_frc, 2)
         else:
             raise ValueError("Unknown method {}".format(curve_task.method))
 
