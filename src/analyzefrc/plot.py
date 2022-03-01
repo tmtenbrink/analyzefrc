@@ -76,7 +76,7 @@ class CurvePlot:
                 ax.vlines(1 / curve.frc_res, min_y, curve.res_y, ls='dashed', colors=['darkgoldenrod'], zorder=3)
             descs.append(curve.desc)
 
-        ax.set_xlabel(f"Spatial frequency ($\\mathrm{{{self.len_unit}}}^{-1}$)")
+        ax.set_xlabel(f"Spatial frequency ($\\mathrm{{{self.len_unit}}}^{{-1}}$)")
         ax.set_ylabel("FRC")
 
         ax.legend()
